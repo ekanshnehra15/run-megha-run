@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Stay Hydrated!</title>
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Luckiest+Guy&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Patrick Hand', 'Fredoka One', cursive;
+            /* Notebook / graph paper look: warm off-white with light grid lines */
+            background-color: #f7f3e8;
+            background-image:
+                linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px);
+            background-size: 32px 32px, 32px 32px;
+            touch-action: none; /* Prevents zooming on mobile */
+            -webkit-font-smoothing: antialiased;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        /* Hydration Bar */
+        .bar-container {
+            width: 100%;
+            max-width: 420px;
+            height: 34px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            border: 3px solid #000; /* sketch border */
+            overflow: hidden;
+            margin: 0 auto;
+            position: relative;
+            box-shadow: 0 6px 0 rgba(0,0,0,0.06);
+        }
+
+        #hydration-fill {
+            height: 100%;
+            width: 100%;
+            background: #00f2fe; /* will be overridden in JS with solid color */
+            transition: width 0.12s linear, background 0.12s linear;
+        }
+
+        .bar-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 4px;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            font-size: 16px;
+            letter-spacing: 1px;
+        }
+
+        #score-display {
+            text-align: center;
+            color: #000;
+            font-size: 22px;
+            font-weight: bold;
+            text-shadow: 0 2px 0 rgba(255,255,255,0.6);
+            pointer-events: none;
+        }
+
+        /* Audio toggle button (hidden by default) */
+        #audio-toggle {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            z-index: 20;
+            padding: 8px 12px;
+            font-family: 'Patrick Hand', cursive;
+            font-size: 14px;
+            border: 3px solid #000;
+            background: #fff;
+            cursor: pointer;
+            display: none; /* shown only if user needs to enable audio */
+        }
+
+        /* Screens */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255,255,255,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            z-index: 10;
+            border: 4px solid #000;
+            box-shadow: 0 10px 0 rgba(0,0,0,0.06);
+        }
+
+    h1 { font-size: 56px; margin-bottom: 10px; text-align: center; font-family: 'Luckiest Guy', 'Patrick Hand', cursive; color: #2b2b2b; text-shadow: 0 6px 0 #fff, 3px 6px 0 rgba(0,0,0,0.12); }
+    p { font-size: 18px; text-align: center; max-width: 80%; line-height: 1.5; color:#222 }
+        
+        button {
+            margin-top: 20px;
+            padding: 12px 28px;
+            font-size: 20px;
+            font-family: 'Patrick Hand', cursive;
+            background: #fff;
+            color: #000;
+            border: 3px solid #000;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 rgba(0,0,0,0.08);
+            transition: transform 0.08s;
+        }
+
+        button:active { transform: translateY(2px); }
+
+        .hidden { display: none !important; }
+
+        /* Subtle wave animation background */
+        /* remove big decorative waves; keep a small doodle area at bottom-left */
+        .clouds { display: none; }
+
+        /* Freeze effect overlay */
+        #freeze-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            border: 10px solid #a8edea;
+            box-sizing: border-box;
+            pointer-events: none;
+            display: none;
+            box-shadow: inset 0 0 50px #a8edea;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="clouds"></div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="freeze-overlay"></div>
+
+        <div id="ui-layer">
+            <div class="bar-container">
+                <div id="hydration-fill"></div>
+                <div class="bar-text">HYDRATION</div>
+            </div>
+            <div id="score-display">Liters: 0.0 L</div>
+            <button id="audio-toggle">Play Music</button>
+        </div>
+
+        <div id="start-screen" class="screen">
+            <h1>Drink Baby Drink</h1>
+            <p>For our 7th anniversary! 09-09-26</p>
+            <p>Use your fingers like I am gonna use them in you. I love you</p>
+            <button onclick="startGame()">Start Running</button>
+        </div>
+
+        <div id="game-over-screen" class="screen hidden">
+            <h1>Oh no! Dehydrated 🥵</h1>
+            <p id="final-score">You collected 0.0 L of water.</p>
+            <button onclick="resetGame()">Try Again</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+    // Game State
+    let isPlaying = false;
+    let liters = 0;
+    let hydrationMax = 200; // larger max so it's harder to fill
+    let hydration = hydrationMax;
+    let hydrationDecay = 0.15; // How fast water drops (per frame-ish)
+    let lastTime = 0;
+    let spawnTimer = 0;
+    let speedMultiplier = 1;
+    let isFrozen = false; // For the ice powerup
+    let freezeTimer = 0;
+    // Special powerup states
+    let meghuActive = false;
+    let meghuTimer = 0;
+    let sadActive = false;
+    let sadTimer = 0;
+
+        // --- Assets & Entities ---
+
+        // Player image (cute/funny) - expected in same folder
+        const playerImg = new Image();
+        playerImg.src = 'player.png';
+        let playerLoaded = false;
+        playerImg.onload = () => { playerLoaded = true; };
+
+    // Background music (looped) - expected in same folder
+    const bgAudio = new Audio('happy.mp3');
+    bgAudio.volume = 0.1; // slightly louder but still gentle
+    bgAudio.loop = true;
+
+    // mode textures
+    const blueImg = new Image();
+    blueImg.src = 'blue.jpg';
+    let blueLoaded = false;
+    blueImg.onload = () => { blueLoaded = true; };
+    const redImg = new Image();
+    redImg.src = 'red.jpg';
+    let redLoaded = false;
+    redImg.onload = () => { redLoaded = true; };
+
+        // Bottle images provided in the folder
+        const bottleImages = {
+            verysmall: new Image(),
+            small: new Image(),
+            medium: new Image(),
+            large: new Image()
+        };
+        bottleImages.verysmall.src = 'bottleverysmall.png';
+        bottleImages.small.src = 'bottlesmall.png';
+        bottleImages.medium.src = 'bottlemedium.png';
+        bottleImages.large.src = 'bottlelarge.png';
+        const bottleLoaded = { verysmall:false, small:false, medium:false, large:false };
+        bottleImages.verysmall.onload = () => bottleLoaded.verysmall = true;
+        bottleImages.small.onload = () => bottleLoaded.small = true;
+        bottleImages.medium.onload = () => bottleLoaded.medium = true;
+        bottleImages.large.onload = () => bottleLoaded.large = true;
+
+        const player = {
+            x: 0,
+            y: 0,
+            width: 110,
+            height: 110 * 0.6,
+            targetX: 0,
+            speed: 8, // keyboard speed
+            wobble: 0
+        };
+
+        const BASE_PLAYER_SPEED = player.speed;
+
+        let items = []; // Bottles and powerups
+        let particles = []; // Splash effects
+        let comics = []; // small comical popups
+        let slowEffectFactor = 1.0;
+        let slowEffectTimer = 0;
+
+        // Bottle types (only these 4). Larger bottles are rarer to keep balance.
+        const BOTTLE_TYPES = [
+            { type: 'verysmall', value: 8, emoji: '💧', liters: 0.1, radius: 14, color: '#4facfe', imageKey: 'verysmall', weight: 40 },
+            { type: 'small', value: 15, emoji: '💧', liters: 0.5, radius: 15, color: '#4facfe', imageKey: 'small', weight: 30 },
+            { type: 'medium', value: 25, emoji: '🍼', liters: 1.0, radius: 20, color: '#00f2fe', imageKey: 'medium', weight: 18 },
+            { type: 'large', value: 40, emoji: '🚰', liters: 2.0, radius: 25, color: '#43e97b', imageKey: 'large', weight: 8 }
+        ];
+
+        // Powerups: MEGHU (electricity) and SAD (red drop). Slightly larger visuals for clarity.
+        const POWERUP_TYPES = [
+            { type: 'meghu', powerup: 'meghu', emoji: '⚡', radius: 36, color: '#88f' },
+            { type: 'sad', powerup: 'sad', emoji: '�', radius: 36, color: '#f66' }
+        ];
+
+        // Chance a spawned item is a powerup (rather than a bottle)
+        const POWERUP_SPAWN_CHANCE = 0.07; // 7% chance per spawn
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            player.y = canvas.height - 150;
+            if(!isPlaying) player.x = canvas.width / 2 - player.width / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Controls
+    // Input & controls (free movement)
+        let dragging = false;
+        let leftPressed = false, rightPressed = false;
+
+        function setTargetFromX(x) {
+            // constrain so player stays fully on-screen
+            const tx = Math.max(0, Math.min(canvas.width - player.width, x - player.width / 2));
+            player.targetX = tx;
+        }
+
+        canvas.addEventListener('pointerdown', (e) => {
+            if (!isPlaying) return;
+            dragging = true;
+            setTargetFromX(e.clientX);
+        });
+        window.addEventListener('pointermove', (e) => {
+            if (!isPlaying) return;
+            if (dragging) setTargetFromX(e.clientX);
+        });
+        window.addEventListener('pointerup', () => dragging = false);
+
+        // Keyboard support
+        window.addEventListener('keydown', (e) => {
+            if (!isPlaying) return;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') leftPressed = true;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') rightPressed = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') leftPressed = false;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') rightPressed = false;
+        });
+
+        // Make canvas focusable for keyboard on click
+        canvas.tabIndex = 1000;
+        canvas.addEventListener('click', () => canvas.focus());
+
+        // Game Loop
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            
+            liters = 0;
+            hydration = hydrationMax;
+            items = [];
+            particles = [];
+            speedMultiplier = 1;
+            isPlaying = true;
+            player.targetX = canvas.width / 2 - player.width / 2;
+            player.x = player.targetX;
+            isFrozen = false;
+            lastTime = performance.now();
+            // start background music (user interaction via Start allows playback)
+            try {
+                bgAudio.currentTime = 0;
+                const p = bgAudio.play();
+                if (p && typeof p.then === 'function') {
+                    p.then(() => {
+                        // played successfully; hide toggle
+                        document.getElementById('audio-toggle').style.display = 'none';
+                    }).catch(() => {
+                        // show toggle so user can manually start audio
+                        document.getElementById('audio-toggle').style.display = 'block';
+                    });
+                }
+            } catch(e) {
+                document.getElementById('audio-toggle').style.display = 'block';
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            startGame();
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            document.getElementById('game-over-screen').classList.remove('hidden');
+            document.getElementById('final-score').innerText = `You collected ${liters.toFixed(1)} L of water!`;
+            try { bgAudio.pause(); bgAudio.currentTime = 0; } catch(e) {}
+        }
+
+        // Audio toggle button handler
+        const audioToggleBtn = document.getElementById('audio-toggle');
+        audioToggleBtn.addEventListener('click', () => {
+            if (bgAudio.paused) {
+                bgAudio.play().then(() => {
+                    audioToggleBtn.style.display = 'none';
+                }).catch(()=>{
+                    // keep visible
+                });
+            } else {
+                bgAudio.pause();
+                audioToggleBtn.innerText = 'Play Music';
+                audioToggleBtn.style.display = 'block';
+            }
+        });
+
+        function createParticles(x, y, color) {
+            for(let i=0; i<8; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: (Math.random() - 0.5) * 5,
+                    life: 1.0,
+                    color: color
+                });
+            }
+        }
+
+        // Helper: rounded rectangle path (does not fill)
+        function roundRect(ctx, x, y, w, h, r) {
+            const radius = Math.min(r, w/2, h/2);
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.arcTo(x + w, y, x + w, y + h, radius);
+            ctx.arcTo(x + w, y + h, x, y + h, radius);
+            ctx.arcTo(x, y + h, x, y, radius);
+            ctx.arcTo(x, y, x + w, y, radius);
+            ctx.closePath();
+        }
+
+        // Draw a stylized bottle at cx,cy with given radius
+        function drawBottle(ctx, cx, cy, r, color) {
+            // sketchy bottle: draw filled body then multiple jitter strokes for hand-drawn look
+            const bodyH = r * 1.6;
+            const bodyW = r * 0.9;
+            const bx = cx - bodyW/2;
+            const by = cy - bodyH/2 + 6;
+
+            // fill body (solid-ish)
+            ctx.save();
+            ctx.fillStyle = color;
+            roundRect(ctx, bx, by, bodyW, bodyH, bodyW*0.25);
+            ctx.fill();
+
+            // cap
+            ctx.fillStyle = '#fff8e6';
+            roundRect(ctx, bx + bodyW*0.15, by - bodyH*0.18, bodyW*0.7, bodyH*0.18, 4);
+            ctx.fill();
+
+            // highlight (simple white stroke)
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(bx + bodyW*0.65, by + bodyH*0.25, bodyW*0.12, bodyH*0.2, 0, 0, Math.PI*2);
+            ctx.stroke();
+
+            // sketch outline using jitter strokes
+            sketchStroke(() => {
+                roundRect(ctx, bx, by, bodyW, bodyH, bodyW*0.25);
+            }, '#000', 2, 2);
+
+            sketchStroke(() => {
+                roundRect(ctx, bx + bodyW*0.15, by - bodyH*0.18, bodyW*0.7, bodyH*0.18, 4);
+            }, '#000', 1.6, 1);
+            ctx.restore();
+        }
+
+        // Sketch stroke helper: call pathFn to create a path, then stroke it multiple times with jitter
+        function sketchStroke(pathFn, color, width, passes) {
+            for (let p = 0; p < passes; p++) {
+                ctx.save();
+                ctx.beginPath();
+                pathFn();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                // apply tiny random translate for jitter
+                const tx = (Math.random() - 0.5) * 1.6;
+                const ty = (Math.random() - 0.5) * 1.6;
+                ctx.translate(tx, ty);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        function gameLoop(timestamp) {
+            if (!isPlaying) return;
+
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Update Player
+            // Adjust player speed for active effects (sad halves movement speed)
+            player.speed = BASE_PLAYER_SPEED * (sadActive ? 0.5 : 1);
+            // Apply keyboard-driven movement alongside pointer target
+            if (leftPressed) player.x -= player.speed;
+            if (rightPressed) player.x += player.speed;
+
+            // Smoothly approach targetX (pointer/drag)
+            player.x += (player.targetX - player.x) * 0.14;
+            // Clamp
+            player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+
+            // Draw Player (image if available, otherwise a cute board)
+            player.wobble = Math.sin(timestamp / 120) * 0.06 * (Math.abs(player.targetX - player.x) > 1 ? 1.5 : 0.6);
+            const px = player.x;
+            const py = player.y;
+            // draw a sketchy shadow
+            ctx.save();
+            ctx.fillStyle = 'rgba(0,0,0,0.16)';
+            ctx.beginPath();
+            ctx.ellipse(px + player.width/2, py + player.height - 6, player.width/2.6, 8, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            if (playerLoaded) {
+                // draw with a tiny rotation & scale for cartoonish wobble and sketch outline
+                const cx = px + player.width/2;
+                const cy = py + player.height/2;
+                ctx.translate(cx, cy);
+                ctx.rotate(player.wobble);
+                ctx.drawImage(playerImg, -player.width/2, -player.height/2, player.width, player.height);
+                // sketch outline around image
+                ctx.translate(-cx, -cy);
+                sketchStroke(() => {
+                    roundRect(ctx, px - 2, py - 2, player.width + 4, player.height + 4, 18);
+                }, '#000', 2, 2);
+            } else {
+                // fallback cute board (sketchy)
+                ctx.fillStyle = '#ffd166';
+                roundRect(ctx, px, py, player.width, player.height, 18);
+                ctx.fill();
+                sketchStroke(() => { roundRect(ctx, px, py, player.width, player.height, 18); }, '#000', 2, 2);
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(px + player.width/2, py + 18, 12, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // 2. Logic (Hydration & Spawning)
+            if(!isFrozen) {
+                hydration -= hydrationDecay;
+                document.getElementById('freeze-overlay').style.display = 'none';
+            } else {
+                // Handle Freeze Timer (frame-time aware)
+                document.getElementById('freeze-overlay').style.display = 'block';
+                freezeTimer -= dt;
+                if(freezeTimer <= 0) isFrozen = false;
+            }
+
+            // Speed up game slightly over time
+            speedMultiplier += 0.00006;
+            // slow powerup effect decays
+            if (slowEffectTimer > 0) {
+                slowEffectTimer -= dt;
+                if (slowEffectTimer <= 0) slowEffectFactor = 1.0;
+            }
+            // Meghu and sad timers
+            if (meghuActive) {
+                meghuTimer -= dt;
+                if (meghuTimer <= 0) meghuActive = false;
+            }
+            if (sadActive) {
+                sadTimer -= dt;
+                if (sadTimer <= 0) sadActive = false;
+            }
+
+            if (hydration <= 0) {
+                hydration = 0;
+                gameOver();
+            }
+
+            // Spawn Items (time-based with random intervals)
+            spawnTimer += dt;
+            // spawn interval between ~500ms and 1100ms scaled slightly
+            const nextSpawnInterval = 500 + Math.random() * 600 / Math.max(1, speedMultiplier);
+            if (spawnTimer > nextSpawnInterval) {
+                spawnTimer = 0;
+                // Decide whether to spawn a powerup or a bottle
+                const spawnIsPowerup = Math.random() < POWERUP_SPAWN_CHANCE;
+                if (spawnIsPowerup) {
+                    const p = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+                    const radius = p.radius;
+                    const spawnX = Math.random() * (canvas.width - radius*2) + radius;
+                    const currentSpeedFactor = slowEffectFactor * (sadActive ? 0.5 : 1);
+                    const fallSpeed = (2 + Math.random() * 3) * speedMultiplier * currentSpeedFactor;
+                    items.push({
+                        x: spawnX - radius,
+                        y: -60,
+                        radius: radius,
+                        value: 0,
+                        emoji: p.emoji,
+                        color: p.color,
+                        powerup: p.powerup,
+                        speed: fallSpeed,
+                        vx: (Math.random() - 0.5) * 1.2
+                    });
+                } else {
+                    // spawn a bottle chosen by weight
+                    const totalWeight = BOTTLE_TYPES.reduce((s,b) => s + b.weight, 0);
+                    let r = Math.random() * totalWeight;
+                    let chosen = BOTTLE_TYPES[0];
+                    for (const b of BOTTLE_TYPES) {
+                        if (r <= b.weight) { chosen = b; break; }
+                        r -= b.weight;
+                    }
+                    const radius = chosen.radius;
+                    const spawnX = Math.random() * (canvas.width - radius*2) + radius;
+                    const currentSpeedFactor = slowEffectFactor * (sadActive ? 0.5 : 1);
+                    const fallSpeed = (2 + Math.random() * 4) * speedMultiplier * currentSpeedFactor; // random fall speed
+                    const drift = (Math.random() - 0.5) * 1.6 * currentSpeedFactor; // sideways drift
+                    const it = {
+                        x: spawnX - radius,
+                        y: -60,
+                        radius: radius,
+                        value: chosen.value,
+                        emoji: chosen.emoji,
+                        liters: chosen.liters,
+                        color: chosen.color,
+                        powerup: null,
+                        speed: fallSpeed,
+                        vx: drift,
+                        imageKey: chosen.imageKey,
+                        img: bottleImages[chosen.imageKey]
+                    };
+                    items.push(it);
+
+                    // during MEGHU time, spawn an extra bottle to make it more exciting
+                    if (meghuActive) {
+                        const offset = (Math.random() - 0.5) * Math.min(80, canvas.width * 0.12);
+                        const it2 = Object.assign({}, it);
+                        it2.x = Math.max(radius, Math.min(canvas.width - radius*2, it.x + offset));
+                        // slight variation in velocity
+                        it2.vx = drift * (0.6 + Math.random() * 0.8);
+                        it2.speed = fallSpeed * (0.95 + Math.random() * 0.2);
+                        items.push(it2);
+                    }
+                }
+            }
+
+            // 3. Update & Draw Items
+            for (let i = items.length - 1; i >= 0; i--) {
+                let item = items[i];
+                item.y += item.speed;
+                item.x += item.vx;
+
+                // Draw bottle texture if available, otherwise sketchy bottle
+                item.wobble = Math.sin((item.y + i * 13) / 50) * 0.6;
+                if (item.powerup) {
+                    // powerup: draw textured badge (blue for meghu, red for sad) with emoji overlay
+                    ctx.save();
+                    const cx = item.x + item.radius;
+                    const cy = item.y + item.radius;
+                    const w = item.radius * 2;
+                    const h = item.radius * 2;
+                    // pick image based on powerup type
+                    let tex = null;
+                    if (item.powerup === 'meghu' && blueLoaded) tex = blueImg;
+                    if (item.powerup === 'sad' && redLoaded) tex = redImg;
+
+                    if (tex && tex.complete) {
+                        // clip to a rounded rect then draw texture
+                        ctx.beginPath();
+                        roundRect(ctx, cx - item.radius, cy - item.radius, w, h, item.radius * 0.3);
+                        ctx.clip();
+                        try { ctx.drawImage(tex, cx - item.radius, cy - item.radius, w, h); } catch(e) {}
+                        ctx.restore();
+                        // sketch border around texture
+                        sketchStroke(() => { roundRect(ctx, cx - item.radius, cy - item.radius, w, h, item.radius * 0.3); }, '#000', 1.8, 2);
+                    } else {
+                        // fallback: colored bubble
+                        ctx.fillStyle = item.color || '#fff';
+                        roundRect(ctx, cx - item.radius, cy - item.radius, w, h, item.radius * 0.3);
+                        ctx.fill();
+                        sketchStroke(() => { roundRect(ctx, cx - item.radius, cy - item.radius, w, h, item.radius * 0.3); }, '#000', 1.8, 2);
+                        ctx.restore();
+                    }
+
+                    // no overlay icon: keep the blue/red texture only (no emojis or faces)
+                } else if (item.img && item.img.complete) {
+                    // draw centered
+                    const iw = item.radius * 2;
+                    const ih = item.radius * 2;
+                    ctx.save();
+                    // playful rotation
+                    ctx.translate(item.x + item.radius, item.y + item.radius);
+                    ctx.rotate(item.wobble * 0.05);
+                    ctx.drawImage(item.img, -iw/2, -ih/2, iw, ih);
+                    ctx.restore();
+                    // sketch outline around image for style
+                    sketchStroke(() => {
+                        ctx.beginPath();
+                        ctx.ellipse(item.x + item.radius, item.y + item.radius, item.radius, item.radius*1.1, 0, 0, Math.PI*2);
+                    }, '#000', 1.6, 2);
+                } else {
+                    drawBottle(ctx, item.x + item.radius, item.y + item.radius, item.radius, item.color);
+                }
+
+                // Collision Detection
+                // Simple box collision
+                if (
+                    player.x < item.x + item.radius * 2 &&
+                    player.x + player.width > item.x &&
+                    player.y < item.y + item.radius * 2 &&
+                    player.y + player.height > item.y
+                ) {
+                    // Collect!
+                    createParticles(item.x, item.y, item.color);
+                    
+                    // compute multipliers
+                    const meghuMult = meghuActive ? 2 : 1;
+                    const sadMult = sadActive ? 0.5 : 1;
+                    if (item.powerup === 'meghu') {
+                        // picking up MEGHU cancels SAD if active
+                        sadActive = false;
+                        sadTimer = 0;
+                        meghuActive = true;
+                        meghuTimer = 10000; // 10 seconds
+                        comics.push({x: player.x + player.width/2, y: player.y - 20, text: 'MEGHU TIME!!!', t: 1200});
+                    } else if (item.powerup === 'sad') {
+                        // picking up SAD cancels MEGHU if active
+                        meghuActive = false;
+                        meghuTimer = 0;
+                        sadActive = true;
+                        sadTimer = 8000; // 8 seconds
+                        comics.push({x: player.x + player.width/2, y: player.y - 20, text: 'PLS DRINK WATER :(', t: 1200});
+                    } else {
+                        // regular bottle; apply meghu and sad multipliers
+                        const add = Math.round(item.value * meghuMult * sadMult);
+                        hydration = Math.min(hydrationMax, hydration + add);
+                        // add liters collected (meghu doubles liter count)
+                        liters += (item.liters || 0) * meghuMult;
+                        // show different messages depending on bottle type
+                        let msg = 'Yum!';
+                        try {
+                            switch (item.imageKey) {
+                                case 'verysmall': msg = 'Tiny sip!'; break;
+                                case 'small': msg = 'Nice!'; break;
+                                case 'medium': msg = 'Refreshing!'; break;
+                                case 'large': msg = 'Hydrated!'; break;
+                                default: msg = 'Yum!';
+                            }
+                        } catch (e) { msg = 'Yum!'; }
+                        comics.push({x: player.x + player.width/2, y: player.y - 20, text: msg, t: 1000});
+                    }
+
+                    items.splice(i, 1);
+                    continue;
+                }
+
+                // Remove if off screen (with small buffer)
+                if (item.y - item.radius > canvas.height + 50) {
+                    items.splice(i, 1);
+                }
+            }
+
+            // 4. Update & Draw Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.05;
+                p.vy += 0.2; // Gravity
+
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // 5. Update & draw comical popups
+            for (let i = comics.length - 1; i >= 0; i--) {
+                const c = comics[i];
+                // float up a little
+                c.y -= dt * 0.02;
+                c.t -= dt;
+                ctx.save();
+                ctx.font = '20px Luckiest Guy, Patrick Hand, Arial';
+                ctx.textAlign = 'center';
+                ctx.lineWidth = 8;
+                ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+                ctx.fillStyle = '#fff';
+                ctx.strokeText(c.text, c.x, c.y);
+                ctx.fillText(c.text, c.x, c.y);
+                ctx.restore();
+                if (c.t <= 0) comics.splice(i, 1);
+            }
+
+            // draw overlays for MEGHU (blue electricity corners) and sad (red screen)
+            if (meghuActive) {
+                // blue washed background tint
+                ctx.save();
+                ctx.fillStyle = 'rgba(0,140,255,0.08)';
+                ctx.fillRect(0,0,canvas.width,canvas.height);
+                // electricity doodles in corners
+                ctx.strokeStyle = '#bfe9ff';
+                ctx.lineWidth = 3;
+                const t = timestamp / 60;
+                function drawBolt(x,y,dir){
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    for(let k=0;k<6;k++){
+                        const nx = x + (Math.random()-0.5)*40 + Math.sin(t+k)*8 * dir;
+                        const ny = y + k*20 + Math.cos(t+k)*6;
+                        ctx.lineTo(nx, ny);
+                    }
+                    ctx.stroke();
+                }
+                // four corners
+                drawBolt(40,40,1);
+                drawBolt(canvas.width-40,40,-1);
+                drawBolt(40,canvas.height-40,1);
+                drawBolt(canvas.width-40,canvas.height-40,-1);
+                ctx.restore();
+            }
+            if (sadActive) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(255,0,0,0.12)';
+                ctx.fillRect(0,0,canvas.width,canvas.height);
+                ctx.restore();
+            }
+
+            // Draw active mode label (top-center) with stylized font
+            if (meghuActive || sadActive) {
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.lineWidth = 10;
+                ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+                // compute label Y so it appears below the bottle count UI
+                let labelY = 64; // fallback
+                try {
+                    const scoreEl = document.getElementById('score-display');
+                    const scoreRect = scoreEl.getBoundingClientRect();
+                    const canvasRect = canvas.getBoundingClientRect();
+                    labelY = (scoreRect.bottom - canvasRect.top) + 8;
+                } catch (e) { labelY = 64; }
+
+                // draw a label background; if an img is provided, use it as textured background
+                function drawLabelBG(img, x, y, w, h) {
+                    ctx.save();
+                    if (img && img.complete) {
+                        try { ctx.drawImage(img, x, y, w, h); } catch (e) { ctx.fillStyle = '#fff'; ctx.fillRect(x,y,w,h); }
+                    } else {
+                        ctx.fillStyle = '#fff';
+                        roundRect(ctx, x, y, w, h, 8);
+                        ctx.fill();
+                    }
+                    sketchStroke(() => { roundRect(ctx, x, y, w, h, 8); }, '#000', 2, 2);
+                    ctx.restore();
+                }
+
+                const labelW = Math.min(canvas.width - 80, 820);
+                const padH = 12;
+
+                // instead of a full banner, draw a small textured image below the liters UI
+                if (meghuActive) {
+                    const size = Math.min(96, Math.max(48, Math.floor(canvas.width * 0.08)));
+                    // compute center under the score element to avoid overlapping other UI
+                    const scoreEl = document.getElementById('score-display');
+                    const scoreRect2 = scoreEl.getBoundingClientRect();
+                    const canvasRect2 = canvas.getBoundingClientRect();
+                    const centerX = ((scoreRect2.left + scoreRect2.right) / 2) - canvasRect2.left;
+                    // prepare label text and font
+                    const label = 'MEGHU TIME!!!';
+                    const fontSize = Math.min(28, Math.max(16, Math.floor(size * 0.45)));
+                    ctx.font = `${fontSize}px Luckiest Guy, Patrick Hand, Arial`;
+                    const textWidth = ctx.measureText(label).width;
+                    const gap = 12;
+                    const totalW = size + gap + textWidth;
+                    let startX = Math.round(centerX - totalW/2);
+                    // clamp horizontally inside canvas with small padding
+                    const pad = 12;
+                    startX = Math.max(pad, Math.min(startX, canvas.width - pad - totalW));
+                    const imgX = startX;
+                    const imgY = labelY;
+                    if (blueLoaded && blueImg.complete) {
+                        try { ctx.drawImage(blueImg, imgX, imgY, size, size); } catch (e) { ctx.fillStyle = '#88f'; ctx.fillRect(imgX, imgY, size, size); }
+                    } else { ctx.fillStyle = '#88f'; ctx.fillRect(imgX, imgY, size, size); }
+                    sketchStroke(() => { roundRect(ctx, imgX, imgY, size, size, 8); }, '#000', 2, 2);
+                    // text to the right
+                    const tx = imgX + size + gap;
+                    const ty = imgY + size/2;
+                    if (blueLoaded) { ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; } else { ctx.fillStyle = '#000'; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; }
+                    ctx.lineWidth = 6;
+                    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+                    ctx.strokeText(label, tx, ty - 2); ctx.fillText(label, tx, ty - 2);
+                }
+
+                if (sadActive) {
+                    const size = Math.min(96, Math.max(48, Math.floor(canvas.width * 0.08)));
+                    const scoreEl = document.getElementById('score-display');
+                    const scoreRect2 = scoreEl.getBoundingClientRect();
+                    const canvasRect2 = canvas.getBoundingClientRect();
+                    const centerX = ((scoreRect2.left + scoreRect2.right) / 2) - canvasRect2.left;
+                    const label = 'PLS DRINK WATER :(';
+                    const fontSize2 = Math.min(26, Math.max(14, Math.floor(size * 0.42)));
+                    ctx.font = `${fontSize2}px Luckiest Guy, Patrick Hand, Arial`;
+                    const textWidth2 = ctx.measureText(label).width;
+                    const gap = 12;
+                    const totalW2 = size + gap + textWidth2;
+                    let startX2 = Math.round(centerX - totalW2/2);
+                    const pad = 12;
+                    startX2 = Math.max(pad, Math.min(startX2, canvas.width - pad - totalW2));
+                    const imgX2 = startX2;
+                    // if MEGHU also active, place SAD below the MEGHU image block
+                    const imgY2 = labelY + (meghuActive ? (Math.min(96, Math.max(48, Math.floor(canvas.width * 0.08))) + 8) : 0);
+                    if (redLoaded && redImg.complete) { try { ctx.drawImage(redImg, imgX2, imgY2, size, size); } catch (e) { ctx.fillStyle = '#f66'; ctx.fillRect(imgX2, imgY2, size, size); } }
+                    else { ctx.fillStyle = '#f66'; ctx.fillRect(imgX2, imgY2, size, size); }
+                    sketchStroke(() => { roundRect(ctx, imgX2, imgY2, size, size, 8); }, '#000', 2, 2);
+                    const tx2 = imgX2 + size + gap;
+                    const ty2 = imgY2 + size/2;
+                    if (redLoaded) { ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; } else { ctx.fillStyle = '#000'; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; }
+                    ctx.lineWidth = 6;
+                    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+                    ctx.strokeText(label, tx2, ty2 - 2); ctx.fillText(label, tx2, ty2 - 2);
+                }
+
+                ctx.restore();
+            }
+
+            // 6. Update UI bar and score (sketch look; solid color)
+            // width is relative to hydrationMax
+            document.getElementById('hydration-fill').style.width = Math.max(0, Math.min(100, (hydration / hydrationMax) * 100)) + '%';
+            document.getElementById('score-display').innerText = `In your tummy: ${liters.toFixed(1)} L`;
+            const fill = document.getElementById('hydration-fill');
+            const pct = Math.max(0, Math.min(1, hydration / hydrationMax));
+            // interpolate color solidly (blue -> yellow -> red) but keep non-gradient
+            function lerp(a,b,t){return Math.round(a+(b-a)*t)}
+            function lerpCol(c1,c2,t){
+                const r=lerp(parseInt(c1.substr(1,2),16),parseInt(c2.substr(1,2),16),t);
+                const g=lerp(parseInt(c1.substr(3,2),16),parseInt(c2.substr(3,2),16),t);
+                const b=lerp(parseInt(c1.substr(5,2),16),parseInt(c2.substr(5,2),16),t);
+                return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+            }
+            const blue = '#00f2fe', yellow = '#ffd166', red = '#ff6b6b';
+            let color = pct>0.5 ? lerpCol(blue,yellow,1-(pct-0.5)*2) : lerpCol(yellow,red,1-pct*2);
+            fill.style.background = color;
+
+            requestAnimationFrame(gameLoop);
+        }
+
+    </script>
+</body>
+</html>
